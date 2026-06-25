@@ -1,111 +1,90 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Permission Update Test</title>
+  <title>Permission Update Test - Fixed</title>
 </head>
 <body>
-  <h2>AccountPermissionUpdate Test</h2>
-  <button onclick="testSimpleSign()">Test Simple Sign</button>
-  <button onclick="updatePermissionV1()">Try Sign Method 1</button>
-  <button onclick="updatePermissionV2()">Try Sign Method 2</button>
-  <button onclick="updatePermissionV3()">Try Sign Method 3</button>
+  <h2>AccountPermissionUpdate Test (Fixed)</h2>
+  <button onclick="runFullTest()">Update Permission</button>
   <pre id="result"></pre>
 
   <script>
-    let unsignedTx = null;
+    async function runFullTest() {
+      const result = document.getElementById('result');
+      result.textContent = '';
 
-    async function buildTx() {
-      const address = window.tronWeb.defaultAddress.base58;
-      const response = await fetch('https://api.trongrid.io/wallet/accountpermissionupdate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner_address: address,
-          owner: {
-            type: 0,
-            permission_name: 'owner',
-            threshold: 1,
-            keys: [{ address: address, weight: 1 }]
-          },
-          actives: [{
-            type: 2,
-            permission_name: 'active',
-            threshold: 1,
-            operations: '7fff1fc0033e0000000000000000000000000000000000000000000000000000',
-            keys: [{ address: address, weight: 1 }]
-          }],
-          visible: true
-        })
-      });
-      unsignedTx = await response.json();
-      document.getElementById('result').textContent = 'TX Built:\n' + JSON.stringify(unsignedTx, null, 2);
-      return unsignedTx;
-    }
-
-    // Test 1: Simple sign to verify TronLink works
-    async function testSimpleSign() {
       try {
-        if (!window.tronWeb?.ready) { alert('Unlock TronLink'); return; }
-        const msg = '0x' + Array(64).fill('0').join(''); // fake hash
-        const signed = await window.tronWeb.trx.sign(msg);
-        document.getElementById('result').textContent = 'Simple sign OK:\n' + signed;
-      } catch (e) {
-        document.getElementById('result').textContent = 'Simple sign FAILED:\n' + e.message;
-      }
-    }
+        // 1. Check TronLink
+        if (!window.tronWeb?.ready) {
+          alert('Please unlock TronLink');
+          return;
+        }
+        const address = window.tronWeb.defaultAddress.base58;
+        result.textContent += 'Address: ' + address + '\n\n';
 
-    // Method 1: Standard sign
-    async function updatePermissionV1() {
-      try {
-        if (!window.tronWeb?.ready) { alert('Unlock TronLink'); return; }
-        const tx = unsignedTx || await buildTx();
-        const signed = await window.tronWeb.trx.sign(tx);
-        document.getElementById('result').textContent += '\n\nSigned V1:\n' + JSON.stringify(signed, null, 2);
-        await broadcast(signed);
-      } catch (e) {
-        document.getElementById('result').textContent += '\n\nV1 ERROR:\n' + e.message;
-      }
-    }
-
-    // Method 2: tronLink.request API
-    async function updatePermissionV2() {
-      try {
-        if (!window.tronLink) { alert('tronLink not found'); return; }
-        const tx = unsignedTx || await buildTx();
-        const signed = await window.tronLink.request({
-          method: 'tron_signTransaction',
-          params: { transaction: tx }
+        // 2. Build unsigned transaction
+        result.textContent += 'Building unsigned tx...\n';
+        const response = await fetch('https://api.trongrid.io/wallet/accountpermissionupdate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            owner_address: address,
+            owner: {
+              type: 0,
+              permission_name: 'owner',
+              threshold: 1,
+              keys: [{ address: address, weight: 1 }]
+            },
+            actives: [{
+              type: 2,
+              permission_name: 'active',
+              threshold: 1,
+              operations: '7fff1fc0033e0000000000000000000000000000000000000000000000000000',
+              keys: [{ address: address, weight: 1 }]
+            }],
+            visible: true
+          })
         });
-        document.getElementById('result').textContent += '\n\nSigned V2:\n' + JSON.stringify(signed, null, 2);
-        await broadcast(signed);
-      } catch (e) {
-        document.getElementById('result').textContent += '\n\nV2 ERROR:\n' + e.message;
-      }
-    }
 
-    // Method 3: With explicit visible and address
-    async function updatePermissionV3() {
-      try {
-        if (!window.tronWeb?.ready) { alert('Unlock TronLink'); return; }
-        const tx = unsignedTx || await buildTx();
-        tx.visible = true;
-        tx.address = window.tronWeb.defaultAddress.base58;
-        const signed = await window.tronWeb.trx.sign(tx);
-        document.getElementById('result').textContent += '\n\nSigned V3:\n' + JSON.stringify(signed, null, 2);
-        await broadcast(signed);
-      } catch (e) {
-        document.getElementById('result').textContent += '\n\nV3 ERROR:\n' + e.message;
-      }
-    }
+        const tx = await response.json();
+        result.textContent += 'Unsigned TX:\n' + JSON.stringify(tx, null, 2) + '\n\n';
 
-    async function broadcast(signedTx) {
-      const res = await fetch('https://api.trongrid.io/wallet/broadcasttransaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(signedTx)
-      });
-      const result = await res.json();
-      document.getElementById('result').textContent += '\n\nBroadcast:\n' + JSON.stringify(result, null, 2);
+        // 3. Sign with TronLink (returns signature string only)
+        result.textContent += 'Requesting signature from TronLink...\n';
+        const signature = await window.tronWeb.trx.sign(tx);
+        result.textContent += 'Signature received:\n' + signature + '\n\n';
+
+        // 4. MANUALLY BUILD SIGNED TRANSACTION
+        const signedTx = {
+          visible: tx.visible,
+          txID: tx.txID,
+          raw_data: tx.raw_data,
+          raw_data_hex: tx.raw_data_hex,
+          signature: [signature]  // <-- KEY FIX
+        };
+
+        result.textContent += 'Signed TX (reconstructed):\n' + JSON.stringify(signedTx, null, 2) + '\n\n';
+
+        // 5. Broadcast
+        result.textContent += 'Broadcasting...\n';
+        const broadcastRes = await fetch('https://api.trongrid.io/wallet/broadcasttransaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(signedTx)
+        });
+
+        const broadcastResult = await broadcastRes.json();
+        result.textContent += 'Broadcast Result:\n' + JSON.stringify(broadcastResult, null, 2);
+
+        if (broadcastResult.code === 'SUCCESS') {
+          result.textContent += '\n\n✅ SUCCESS! TXID: ' + broadcastResult.txid;
+        } else {
+          result.textContent += '\n\n❌ BROADCAST FAILED: ' + (broadcastResult.message || JSON.stringify(broadcastResult));
+        }
+
+      } catch (err) {
+        result.textContent += '\n\nERROR:\n' + err.message + '\n' + err.stack;
+      }
     }
   </script>
 </body>
