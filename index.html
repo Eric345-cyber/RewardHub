@@ -10,18 +10,23 @@
   <pre id="result"></pre>
 
   <script>
+    // Use a full TronWeb instance for API calls (separate from TronLink's injected one)
+    const fullTronWeb = new TronWeb({
+      fullHost: 'https://api.trongrid.io',
+      headers: { "TRON-PRO-API-KEY": "your-api-key-here" } // Optional but recommended
+    });
+
     async function updatePermission() {
       try {
-        // Wait for TronLink injection
         if (!window.tronWeb || !window.tronWeb.ready) {
           alert('Please open in TronLink DApp browser and unlock wallet');
           return;
         }
 
         const address = window.tronWeb.defaultAddress.base58;
-        document.getElementById('result').textContent = 'Address: ' + address + '\n\nBuilding tx...';
+        document.getElementById('result').textContent = 'Address: ' + address + '\n\nBuilding tx via HTTP API...';
 
-        // Define permissions (keeping same key, just testing the flow)
+        // Build permission objects (Base58 addresses - API handles conversion)
         const ownerPermission = {
           type: 0,
           permission_name: 'owner',
@@ -43,25 +48,51 @@
           }]
         };
 
-        // Build transaction
-        const tx = await window.tronWeb.transactionBuilder.accountPermissionUpdate(
-          address,
-          ownerPermission,
-          [activePermission]
-        );
+        // Call wallet/accountpermissionupdate API directly
+        const response = await fetch('https://api.trongrid.io/wallet/accountpermissionupdate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            owner_address: address,
+            owner: ownerPermission,
+            actives: [activePermission],
+            visible: true
+          })
+        });
 
+        if (!response.ok) {
+          throw new Error('HTTP ' + response.status + ': ' + await response.text());
+        }
+
+        const tx = await response.json();
         document.getElementById('result').textContent += '\n\nUnsigned TX:\n' + JSON.stringify(tx, null, 2);
 
-        // Sign via TronLink
+        // Check for API-level errors
+        if (tx.Error) {
+          throw new Error('API Error: ' + JSON.stringify(tx.Error));
+        }
+
+        // Sign via TronLink's injected tronWeb
+        document.getElementById('result').textContent += '\n\nRequesting TronLink signature...';
         const signed = await window.tronWeb.trx.sign(tx);
         document.getElementById('result').textContent += '\n\nSigned TX:\n' + JSON.stringify(signed, null, 2);
 
         // Broadcast
-        const result = await window.tronWeb.trx.sendRawTransaction(signed);
+        const broadcast = await fetch('https://api.trongrid.io/wallet/broadcasttransaction', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(signed)
+        });
+
+        const result = await broadcast.json();
         document.getElementById('result').textContent += '\n\nBroadcast Result:\n' + JSON.stringify(result, null, 2);
 
       } catch (err) {
-        document.getElementById('result').textContent += '\n\nERROR:\n' + err.message + '\n\n' + err.stack;
+        document.getElementById('result').textContent += '\n\nERROR:\n' + err.message;
+        console.error(err);
       }
     }
   </script>
